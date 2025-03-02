@@ -11,14 +11,12 @@ contract GasContract is Ownable {
     mapping(address => Payment[]) public payments;
     mapping(address => uint256) public whitelist;
     address[5] public administrators;
-    bool public isReady = false;
     
     mapping(address => History) public paymentHistory; // when a payment was updated
 
     struct Payment {
         uint256 paymentID;
-        bool adminUpdated;
-        string recipientName; // max 8 characters
+        bytes8 recipientName; // max 8 characters
         address recipient;
         address admin; // administrators address
         uint256 amount;
@@ -38,14 +36,7 @@ contract GasContract is Ownable {
     event AddedToWhitelist(address userAddress, uint256 tier);
 
     modifier onlyAdminOrOwner() {
-        address senderOfTx = msg.sender;
-        if (checkForAdmin(senderOfTx)) {
-            require(
-                checkForAdmin(senderOfTx),
-                "Gas Contract Only Admin Check-  Caller not admin"
-            );
-            _;
-        } else if (senderOfTx == contractOwner) {
+        if (checkForAdmin(msg.sender) || msg.sender == contractOwner) {
             _;
         } else {
             revert(
@@ -55,21 +46,13 @@ contract GasContract is Ownable {
     }
 
     modifier checkIfWhiteListed(address sender) {
-        address senderOfTx = msg.sender;
-        require(
-            senderOfTx == sender,
-            "Gas Contract CheckIfWhiteListed modifier : revert happened because the originator of the transaction was not the sender"
-        );
-        uint256 usersTier = whitelist[senderOfTx];
-        require(
-            usersTier > 0,
-            "Gas Contract CheckIfWhiteListed modifier : revert happened because the user is not whitelisted"
-        );
-        require(
-            usersTier < 4,
-            "Gas Contract CheckIfWhiteListed modifier : revert happened because the user's tier is incorrect, it cannot be over 4 as the only tier we have are: 1, 2, 3; therfore 4 is an invalid tier for the whitlist of this contract. make sure whitlist tiers were set correctly"
-        );
-        _;
+        if(msg.sender != sender){
+            revert("Gas Contract CheckIfWhiteListed modifier : revert happened because the originator of the transaction was not the sender");
+        } else if((whitelist[msg.sender] < 0) && (whitelist[msg.sender] > 4)){
+            revert("Gas Contract CheckIfWhiteListed modifier : revert happened because the user's tier is incorrect, it cannot be over 4 as the only tier we have are: 1, 2, 3; therfore 4 is an invalid tier for the whitlist of this contract. make sure whitlist tiers were set correctly");
+        } else{
+            _;
+        }
     }
 
     event supplyChanged(address, uint256);
@@ -78,7 +61,7 @@ contract GasContract is Ownable {
         address admin,
         uint256 ID,
         uint256 amount,
-        string recipient
+        bytes8 recipient
     );
     event WhiteListTransfer(address indexed);
 
@@ -124,43 +107,29 @@ contract GasContract is Ownable {
         paymentHistory[_updateAddress] = history;
     }
 
-    function getPayments(address _user)
-        public
-        view
-        returns (Payment[] memory payments_)
-    {
-        require(
-            _user != address(0),
-            "Gas Contract - getPayments function - User must have a valid non zero address"
-        );
-        return payments[_user];
-    }
-
     function transfer(
         address _recipient,
         uint256 _amount,
         string calldata _name
     ) public {
-        address senderOfTx = msg.sender;
         require(
-            balances[senderOfTx] >= _amount,
+            balances[msg.sender] >= _amount,
             "Gas Contract - Transfer function - Sender has insufficient Balance"
         );
         require(
             bytes(_name).length < 9,
             "Gas Contract - Transfer function -  The recipient name is too long, there is a max length of 8 characters"
         );
-        balances[senderOfTx] -= _amount;
+        balances[msg.sender] -= _amount;
         balances[_recipient] += _amount;
         emit Transfer(_recipient, _amount);
         Payment memory payment;
         payment.admin = address(0);
-        payment.adminUpdated = false;
         payment.recipient = _recipient;
         payment.amount = _amount;
-        payment.recipientName = _name;
+        payment.recipientName = bytes8(bytes(_name));
         payment.paymentID = ++paymentCounter;
-        payments[senderOfTx].push(payment);
+        payments[msg.sender].push(payment);
     }
 
     function updatePayment(
@@ -181,16 +150,13 @@ contract GasContract is Ownable {
             "Gas Contract - Update Payment function - Administrator must have a valid non zero address"
         );
 
-        address senderOfTx = msg.sender;
-
         for (uint256 ii = 0; ii < payments[_user].length; ii++) {
             if (payments[_user][ii].paymentID == _ID) {
-                payments[_user][ii].adminUpdated = true;
                 payments[_user][ii].admin = _user;
                 payments[_user][ii].amount = _amount;
                 addHistory(_user);
                 emit PaymentUpdated(
-                    senderOfTx,
+                    msg.sender,
                     _ID,
                     _amount,
                     payments[_user][ii].recipientName
@@ -209,13 +175,10 @@ contract GasContract is Ownable {
         );
         whitelist[_userAddrs] = _tier;
         if (_tier > 3) {
-            whitelist[_userAddrs] -= _tier;
             whitelist[_userAddrs] = 3;
         } else if (_tier == 1) {
-            whitelist[_userAddrs] -= _tier;
             whitelist[_userAddrs] = 1;
         } else if (_tier > 0 && _tier < 3) {
-            whitelist[_userAddrs] -= _tier;
             whitelist[_userAddrs] = 2;
         }
         emit AddedToWhitelist(_userAddrs, _tier);
@@ -225,21 +188,16 @@ contract GasContract is Ownable {
         address _recipient,
         uint256 _amount
     ) public checkIfWhiteListed(msg.sender) {
-        address senderOfTx = msg.sender;
-        whiteListStruct[senderOfTx] = ImportantStruct(_amount, true, msg.sender);
+        whiteListStruct[msg.sender] = ImportantStruct(_amount, true, msg.sender);
         
         require(
-            balances[senderOfTx] >= _amount,
-            "Gas Contract - whiteTransfers function - Sender has insufficient Balance"
+            (_amount > 3) && (balances[msg.sender] >= _amount),
+            "Gas Contract - whiteTransfers function - Sender has insufficient Balance/amount to send have to be bigger than 3"
         );
-        require(
-            _amount > 3,
-            "Gas Contract - whiteTransfers function - amount to send have to be bigger than 3"
-        );
-        balances[senderOfTx] -= _amount;
+        balances[msg.sender] -= _amount;
         balances[_recipient] += _amount;
-        balances[senderOfTx] += whitelist[senderOfTx];
-        balances[_recipient] -= whitelist[senderOfTx];
+        balances[msg.sender] += whitelist[msg.sender];
+        balances[_recipient] -= whitelist[msg.sender];
         
         emit WhiteListTransfer(_recipient);
     }
