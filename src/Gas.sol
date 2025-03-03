@@ -94,17 +94,17 @@ contract GasContract is Ownable {
     }
 
     function balanceOf(address _user) public view returns (uint256 balance_) {
-        uint256 balance = balances[_user];
-        return balance;
+       // uint256 balance = balances[_user];
+        return balances[_user];
     }
 
     function addHistory(address _updateAddress)
         public
     {
-        History memory history;
-        history.blockNumber = block.number;
-        history.lastUpdate = block.timestamp;
-        paymentHistory[_updateAddress] = history;
+        // History memory history;
+        // history.blockNumber = block.number;
+        // history.lastUpdate = block.timestamp;
+         paymentHistory[_updateAddress] = History(block.timestamp, block.number);
     }
 
     function transfer(
@@ -123,13 +123,13 @@ contract GasContract is Ownable {
         balances[msg.sender] -= _amount;
         balances[_recipient] += _amount;
         emit Transfer(_recipient, _amount);
-        Payment memory payment;
-        payment.admin = address(0);
-        payment.recipient = _recipient;
-        payment.amount = _amount;
-        payment.recipientName = bytes8(bytes(_name));
-        payment.paymentID = ++paymentCounter;
-        payments[msg.sender].push(payment);
+        // Payment memory payment;
+        // payment.admin = address(0);
+        // payment.recipient = _recipient;
+        // payment.amount = _amount;
+        // payment.recipientName = bytes8(bytes(_name));
+        // payment.paymentID = ++paymentCounter;
+        payments[msg.sender].push(Payment(++paymentCounter,  bytes8(bytes(_name)),  _recipient, address(0), _amount ));
     }
 
     function updatePayment(
