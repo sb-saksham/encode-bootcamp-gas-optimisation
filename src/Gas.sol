@@ -123,12 +123,6 @@ contract GasContract is Ownable {
         balances[msg.sender] -= _amount;
         balances[_recipient] += _amount;
         emit Transfer(_recipient, _amount);
-        // Payment memory payment;
-        // payment.admin = address(0);
-        // payment.recipient = _recipient;
-        // payment.amount = _amount;
-        // payment.recipientName = bytes8(bytes(_name));
-        // payment.paymentID = ++paymentCounter;
         payments[msg.sender].push(Payment(++paymentCounter,  bytes8(bytes(_name)),  _recipient, address(0), _amount ));
     }
 
